@@ -1,10 +1,29 @@
 import Foundation
 import BypassCore
 
-/// XPC-сервис: тонкая обёртка над Engine.
+/// XPC-сервис: тонкая обёртка над Engine. Один экземпляр на подключение.
 final class Service: NSObject, HelperProtocol {
     private let engine: Engine
-    init(engine: Engine) { self.engine = engine }
+    private let id = UUID()
+
+    init(engine: Engine, client: ClientProtocol?) {
+        self.engine = engine
+        super.init()
+        // Подписываем клиента на изменения статуса (push вместо опроса).
+        if let client {
+            let id = id
+            Task {
+                await engine.subscribe(id) { status in
+                    if let data = try? JSONEncoder().encode(status) { client.statusChanged(data) }
+                }
+            }
+        }
+    }
+
+    func detach() {
+        let id = id
+        Task { await engine.unsubscribe(id) }
+    }
 
     func start(_ request: Data, reply: @escaping (String?) -> Void) {
         guard let req = try? JSONDecoder().decode(StartRequest.self, from: request) else {
@@ -37,11 +56,16 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate {
         // Принимаем только подписанное нашим идентификатором приложение.
         c.setCodeSigningRequirement(Constants.clientRequirement)
         c.exportedInterface = NSXPCInterface(with: HelperProtocol.self)
-        c.exportedObject = Service(engine: engine)
+        c.remoteObjectInterface = NSXPCInterface(with: ClientProtocol.self)
+
+        let client = c.remoteObjectProxyWithErrorHandler { _ in } as? ClientProtocol
+        let service = Service(engine: engine, client: client)
+        c.exportedObject = service
 
         lock.lock(); connections += 1; lock.unlock()
         // Когда приложение закрылось или упало, убираем маршруты.
         c.invalidationHandler = { [self] in
+            service.detach()
             lock.lock(); connections -= 1; let left = connections; lock.unlock()
             if left == 0 { Task { await engine.stop() } }
         }
@@ -62,6 +86,7 @@ let delegate = ListenerDelegate(engine: engine)
 let listener = NSXPCListener(machServiceName: Constants.helperLabel)
 listener.delegate = delegate
 listener.resume()
+Task { await engine.begin() }
 
 // При остановке демона (SIGTERM от launchd) убираем маршруты.
 signal(SIGTERM, SIG_IGN)

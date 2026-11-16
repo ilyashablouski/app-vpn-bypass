@@ -3,6 +3,10 @@ import BypassCore
 import os
 
 /// Периодически приводит маршруты к желаемому состоянию.
+///
+/// Экономия ресурсов: цикл работает с низким приоритетом и допуском таймера (пробуждения объединяются
+/// системой), интервал растёт, пока ничего не меняется, смена сети ловится событием PF_ROUTE, а в простое
+/// (исключения остановлены) процесс завершается и освобождает память.
 actor Engine {
     private let log = Logger(subsystem: Constants.helperLabel, category: "engine")
     private let manager: RouteManager
@@ -17,49 +21,110 @@ actor Engine {
     private let appRetention: TimeInterval = 600
 
     private var lastError: String?
+    /// Сколько циклов подряд маршруты не менялись (для адаптивного интервала).
+    private var unchanged = 0
+    private var lastSyncEnd = Date.distantPast
+
+    private var watcher: RouteChangeWatcher?
+    private var idleExit: Task<Void, Never>?
+    private let idleTimeout: UInt64 = 60
+
+    private var observers: [UUID: (HelperStatus) -> Void] = [:]
+    private var lastPublished: HelperStatus?
 
     init(backend: RouteBackend) {
         manager = RouteManager(backend: backend)
     }
 
+    /// Вызывается один раз при запуске демона: если им никто не пользуется, он завершится.
+    func begin() { scheduleIdleExit() }
+
+    // MARK: Управление
+
     /// Применяет запрос и возвращается после первой синхронизации, чтобы статус сразу был точным.
     func start(_ req: StartRequest) async {
+        idleExit?.cancel()
+        idleExit = nil
         request = req
         generation += 1
         loop?.cancel()
         loop = nil
+        unchanged = 0
         let gen = generation
+
+        if watcher == nil {
+            let w = RouteChangeWatcher(debounce: 1.5) { [weak self] in
+                Task { await self?.networkChanged() }
+            }
+            w.start()
+            watcher = w
+        }
+
         await sync(generation: gen)
         guard gen == generation else { return } // за время синхронизации пришёл новый запрос или stop()
-        let interval = UInt64(max(5, req.interval)) * 1_000_000_000
-        loop = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: interval)
-                guard !Task.isCancelled else { return }
-                await self?.sync(generation: gen)
-            }
-        }
+        startLoop(generation: gen)
     }
 
     func stop() {
         generation += 1
         loop?.cancel()
         loop = nil
+        watcher?.stop()
+        watcher = nil
         request = nil
         resolved.removeAll()
         appSeen.removeAll()
+        unchanged = 0
         manager.removeAll()
         manager.persist(to: Constants.routesStatePath)
         lastError = nil
+        publish()
+        scheduleIdleExit()
     }
 
     func status() -> HelperStatus {
-        HelperStatus(running: loop != nil, routeCount: manager.owned.count,
+        HelperStatus(running: request != nil, routeCount: manager.owned.count,
                      gateway: manager.gateway.map(IPv4Target.format), lastError: lastError)
+    }
+
+    func subscribe(_ id: UUID, _ callback: @escaping (HelperStatus) -> Void) { observers[id] = callback }
+    func unsubscribe(_ id: UUID) { observers[id] = nil }
+
+    // MARK: Цикл
+
+    private func startLoop(generation gen: Int) {
+        loop?.cancel()
+        loop = Task(priority: .utility) { [weak self] in
+            while !Task.isCancelled {
+                guard let seconds = await self?.nextDelay() else { return }
+                // Допуск 20%: система объединяет пробуждения и экономит энергию.
+                try? await Task.sleep(for: .seconds(seconds), tolerance: .seconds(max(1, seconds / 5)))
+                guard !Task.isCancelled else { return }
+                await self?.sync(generation: gen)
+            }
+        }
+    }
+
+    private func nextDelay() -> Int {
+        guard let req = request else { return Constants.defaultInterval }
+        return SyncSchedule.delay(base: max(5, req.interval), unchanged: unchanged,
+                                  hasApps: req.entries.contains { $0.kind == .app })
+    }
+
+    /// Сеть изменилась (смена Wi-Fi, шлюза, VPN): синхронизируемся сразу и сбрасываем растянутый интервал.
+    /// События от наших собственных маршрутов игнорируются.
+    private func networkChanged() async {
+        guard request != nil, Date().timeIntervalSince(lastSyncEnd) > 3 else { return }
+        unchanged = 0
+        let gen = generation
+        await sync(generation: gen)
+        guard gen == generation else { return }
+        startLoop(generation: gen)
     }
 
     private func sync(generation gen: Int) async {
         guard gen == generation, let req = request else { return }
+        defer { lastSyncEnd = Date() }
 
         let routes = RouteTable.current()
         let gateway: UInt32
@@ -70,6 +135,7 @@ actor Engine {
         } else {
             lastError = "Не удалось определить шлюз физического интерфейса"
             log.error("gateway not found")
+            publish()
             return
         }
 
@@ -105,9 +171,38 @@ actor Engine {
         for ips in resolved.values { desired.formUnion(ips) }
         desired.formUnion(appSeen.keys)
 
+        let before = manager.owned
         let failures = manager.sync(desired: desired, gateway: gateway)
+        if manager.owned != before || failures > 0 { unchanged = 0 } else { unchanged += 1 }
         manager.persist(to: Constants.routesStatePath)
         lastError = failures > 0 ? "Не удалось добавить маршрутов: \(failures)" : nil
         log.info("routes=\(self.manager.owned.count) failures=\(failures)")
+        publish()
+    }
+
+    // MARK: Уведомления и выход по простою
+
+    private func publish() {
+        let s = status()
+        guard s != lastPublished else { return }
+        lastPublished = s
+        for callback in observers.values { callback(s) }
+    }
+
+    private func scheduleIdleExit() {
+        idleExit?.cancel()
+        let timeout = idleTimeout
+        idleExit = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(timeout))
+            guard !Task.isCancelled else { return }
+            await self?.exitIfIdle()
+        }
+    }
+
+    /// launchd поднимет демон заново при следующем обращении (Mach-сервис по требованию).
+    private func exitIfIdle() {
+        guard request == nil else { return }
+        log.info("idle, exiting")
+        exit(0)
     }
 }
