@@ -19,6 +19,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Library/LaunchDaemons" "$APP/Conte
 cp "$BIN/VPNBypass" "$APP/Contents/MacOS/VPNBypass"
 cp "$BIN/VPNBypassHelper" "$APP/Contents/MacOS/VPNBypassHelper"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns" # пересоздать: swift Resources/make-icon.swift Resources/AppIcon.icns
 cp Resources/com.vpnbypass.helper.plist "$APP/Contents/Library/LaunchDaemons/"
 
 # Идентификаторы подписи должны совпадать с требованиями XPC (Constants.swift).
