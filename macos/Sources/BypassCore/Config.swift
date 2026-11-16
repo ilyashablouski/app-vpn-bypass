@@ -46,8 +46,24 @@ public struct Settings: Codable, Equatable, Sendable {
     public var interval = Constants.defaultInterval
     /// Ручной шлюз вместо автоопределения.
     public var gatewayOverride: String?
+    /// Резолвить домены исключений через DNS обычной сети (файлы /etc/resolver), а не через DNS VPN.
+    public var resolveViaPhysicalDNS = true
+    /// DNS-сервер для этого режима; по умолчанию шлюз (роутер).
+    public var dnsServer: String?
 
     public init() {}
+
+    // Ручной декодер: поля, которых нет в старых config.json, берут значения по умолчанию.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        entries = try c.decodeIfPresent([Entry].self, forKey: .entries) ?? []
+        bypassEnabled = try c.decodeIfPresent(Bool.self, forKey: .bypassEnabled) ?? false
+        autoResume = try c.decodeIfPresent(Bool.self, forKey: .autoResume) ?? true
+        interval = try c.decodeIfPresent(Int.self, forKey: .interval) ?? Constants.defaultInterval
+        gatewayOverride = try c.decodeIfPresent(String.self, forKey: .gatewayOverride)
+        resolveViaPhysicalDNS = try c.decodeIfPresent(Bool.self, forKey: .resolveViaPhysicalDNS) ?? true
+        dnsServer = try c.decodeIfPresent(String.self, forKey: .dnsServer)
+    }
 }
 
 public enum SettingsStore {
@@ -103,11 +119,27 @@ public struct StartRequest: Codable, Sendable {
     public var entries: [Entry]
     public var interval: Int
     public var gateway: String?
+    /// Управлять файлами /etc/resolver для доменов (резолв через DNS обычной сети).
+    public var useDirectDNS: Bool
+    /// DNS-сервер для этого режима; nil означает шлюз.
+    public var dnsServer: String?
 
-    public init(entries: [Entry], interval: Int, gateway: String?) {
+    public init(entries: [Entry], interval: Int, gateway: String?,
+                useDirectDNS: Bool = false, dnsServer: String? = nil) {
         self.entries = entries
         self.interval = interval
         self.gateway = gateway
+        self.useDirectDNS = useDirectDNS
+        self.dnsServer = dnsServer
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        entries = try c.decode([Entry].self, forKey: .entries)
+        interval = try c.decode(Int.self, forKey: .interval)
+        gateway = try c.decodeIfPresent(String.self, forKey: .gateway)
+        useDirectDNS = try c.decodeIfPresent(Bool.self, forKey: .useDirectDNS) ?? false
+        dnsServer = try c.decodeIfPresent(String.self, forKey: .dnsServer)
     }
 }
 
