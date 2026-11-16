@@ -6,6 +6,7 @@ import BypassCore
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var newHost = ""
+    @State private var newNote = ""
     @State private var message: String?
     @State private var intervalText = ""
     @State private var gatewayText = ""
@@ -14,7 +15,7 @@ struct SettingsView: View {
         Form {
             Section("Исключения") {
                 HStack {
-                    Text("Домен/IP:")
+                    Text("Домен/IP:").frame(width: 72, alignment: .leading)
                     // В Form заголовок TextField становится подписью слева, а само поле
                     // без рамки не видно: поэтому своя рамка, подсказка и скрытая подпись.
                     TextField("Домен, IP или подсеть", text: $newHost,
@@ -24,6 +25,13 @@ struct SettingsView: View {
                         .onSubmit(addHost)
                     Button("Добавить", action: addHost)
                         .disabled(newHost.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                HStack {
+                    Text("Описание:").frame(width: 72, alignment: .leading)
+                    TextField("Описание", text: $newNote, prompt: Text("необязательно, например: мой VPS (ssh)"))
+                        .labelsHidden()
+                        .bordered()
+                        .onSubmit(addHost)
                 }
                 HStack {
                     Button("Добавить приложение…", action: pickApp)
@@ -47,7 +55,7 @@ struct SettingsView: View {
                 Toggle("Возобновлять при повторном подключении VPN", isOn: Binding(
                     get: { model.settings.autoResume }, set: { model.setAutoResume($0) }))
                 Text("При отключении VPN исключения останавливаются автоматически.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.noteText).foregroundStyle(.secondary)
             }
 
             Section("Дополнительно") {
@@ -102,8 +110,11 @@ struct SettingsView: View {
     }
 
     private func addHost() {
-        message = model.addHost(newHost)
-        if message == nil { newHost = "" }
+        message = model.addHost(newHost, note: newNote)
+        if message == nil {
+            newHost = ""
+            newNote = ""
+        }
     }
 
     private func pickApp() {
@@ -145,4 +156,9 @@ struct BorderedField: ViewModifier {
 
 extension View {
     func bordered(autofocus: Bool = false) -> some View { modifier(BorderedField(autofocus: autofocus)) }
+}
+
+extension Font {
+    /// Размер вспомогательного текста: описания записей и пояснения в настройках (12 пт, на 2 больше .caption).
+    static let noteText = Font.system(size: 12)
 }

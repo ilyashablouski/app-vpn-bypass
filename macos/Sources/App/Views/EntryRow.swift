@@ -9,6 +9,7 @@ struct EntryRow: View {
 
     @State private var editing = false
     @State private var text = ""
+    @State private var noteText = ""
     @State private var error: String?
     @State private var copied = false
     @State private var confirmingDelete = false
@@ -31,21 +32,31 @@ struct EntryRow: View {
         Group {
             // Копирование и правка нужны только для адресов; у приложений доступно лишь удаление.
             if entry.kind == .host {
-                HStack(spacing: 4) {
-                    Text(entry.value).textSelection(.enabled)
-                    Button(action: copy) {
-                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            .foregroundStyle(copied ? Color.green : Color.secondary)
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 4) {
+                        Text(entry.value).textSelection(.enabled)
+                        Button(action: copy) {
+                            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                                .foregroundStyle(copied ? Color.green : Color.secondary)
+                        }
+                        .buttonStyle(IconButtonStyle())
+                        .help("Скопировать")
                     }
-                    .buttonStyle(IconButtonStyle())
-                    .help("Скопировать")
+                    if let note = entry.note {
+                        Text(note)
+                            .font(.noteText)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .help(note)
+                    }
                 }
                 Spacer()
                 Button(action: beginEdit) {
                     Image(systemName: "pencil").foregroundStyle(.secondary)
                 }
                 .buttonStyle(IconButtonStyle())
-                .help("Изменить адрес")
+                .help("Изменить адрес и описание")
             } else {
                 Text(entry.value)
                 Spacer()
@@ -66,11 +77,18 @@ struct EntryRow: View {
 
     private var editor: some View {
         Group {
-            TextField("", text: $text, prompt: Text("example.com, 1.2.3.4 или 10.0.0.0/8"))
-                .labelsHidden()
-                .bordered(autofocus: true)
-                .onSubmit(save)
-                .onExitCommand(perform: cancel)
+            VStack(spacing: 6) {
+                TextField("", text: $text, prompt: Text("example.com, 1.2.3.4 или 10.0.0.0/8"))
+                    .labelsHidden()
+                    .bordered(autofocus: true)
+                    .onSubmit(save)
+                    .onExitCommand(perform: cancel)
+                TextField("", text: $noteText, prompt: Text("Описание (необязательно)"))
+                    .labelsHidden()
+                    .bordered()
+                    .onSubmit(save)
+                    .onExitCommand(perform: cancel)
+            }
             Button(action: save) { Image(systemName: "checkmark").foregroundStyle(Color.green) }
                 .buttonStyle(IconButtonStyle())
                 .help("Сохранить")
@@ -94,12 +112,13 @@ struct EntryRow: View {
 
     private func beginEdit() {
         text = entry.value
+        noteText = entry.note ?? ""
         error = nil
         editing = true
     }
 
     private func save() {
-        if let message = model.updateHost(entry, to: text) {
+        if let message = model.updateHost(entry, to: text, note: noteText) {
             error = message
         } else {
             error = nil

@@ -161,10 +161,10 @@ final class AppModel {
 
     /// Возвращает текст ошибки или nil.
     @discardableResult
-    func addHost(_ text: String) -> String? {
+    func addHost(_ text: String, note: String? = nil) -> String? {
         let host = Validation.normalizeHost(text)
         guard Validation.isValidHost(host) else { return "Не похоже на домен, IP или подсеть" }
-        return add(Entry(kind: .host, value: host))
+        return add(Entry(kind: .host, value: host, note: note))
     }
 
     func addApp(_ url: URL) {
@@ -180,15 +180,16 @@ final class AppModel {
     }
 
     /// Меняет адрес записи-домена/IP на месте (порядок в списке сохраняется). Возвращает текст ошибки или nil.
-    func updateHost(_ entry: Entry, to text: String) -> String? {
+    func updateHost(_ entry: Entry, to text: String, note: String?) -> String? {
         let host = Validation.normalizeHost(text)
         guard Validation.isValidHost(host) else { return "Не похоже на домен, IP или подсеть" }
         guard let index = settings.entries.firstIndex(where: { $0.id == entry.id }) else { return "Запись не найдена" }
-        if host == entry.value { return nil }
-        let updated = Entry(kind: .host, value: host)
-        guard !settings.entries.contains(where: { $0.id == updated.id }) else { return "Уже есть в списке" }
+        let updated = Entry(kind: .host, value: host, note: note)
+        if updated == entry { return nil }
+        if host != entry.value, settings.entries.contains(where: { $0.id == updated.id }) { return "Уже есть в списке" }
         settings.entries[index] = updated
-        entriesChanged()
+        // Менялось только описание: маршруты те же, пересинхронизация не нужна.
+        if host == entry.value { save() } else { entriesChanged() }
         return nil
     }
 
