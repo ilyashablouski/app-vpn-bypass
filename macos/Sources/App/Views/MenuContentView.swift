@@ -4,6 +4,10 @@ import AppKit
 struct MenuContentView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.colorScheme) private var scheme
+
+    /// Белый текст в тёмной теме, чёрный в светлой.
+    private var textColor: Color { scheme == .dark ? .white : .black }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -13,12 +17,13 @@ struct MenuContentView: View {
                     .frame(width: 8, height: 8)
                 Text(model.vpnActive ? "VPN подключён" : "VPN не подключён")
                     .font(.headline)
+                    .foregroundStyle(textColor)
             }
 
             Toggle(isOn: Binding(get: { model.settings.bypassEnabled },
                                  set: { model.setBypassEnabled($0) })) {
                 VStack(alignment: .leading) {
-                    Text("Исключения из VPN")
+                    Text("Исключения из VPN").foregroundStyle(textColor)
                     Text(model.summary).font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -31,6 +36,7 @@ struct MenuContentView: View {
                          : "Для изменения маршрутов нужен helper")
                         .font(.caption)
                     Button("Установить helper") { model.installHelper() }
+                        .buttonStyle(MenuButtonStyle())
                 }
             }
 
@@ -46,6 +52,7 @@ struct MenuContentView: View {
                     openWindow(id: "settings")
                     NSApp.activate(ignoringOtherApps: true)
                 }
+                .buttonStyle(MenuButtonStyle())
                 Spacer()
                 Button("Выйти") {
                     Task {
@@ -53,6 +60,7 @@ struct MenuContentView: View {
                         NSApp.terminate(nil)
                     }
                 }
+                .buttonStyle(MenuButtonStyle())
             }
         }
         .padding(14)
@@ -61,5 +69,23 @@ struct MenuContentView: View {
             model.refreshSystemState()
             await model.refreshStatus()
         }
+    }
+}
+
+/// Кнопки меню: контрастный текст (белый в тёмной теме, чёрный в светлой);
+/// стандартный стиль в окне меню выглядит блёклым.
+struct MenuButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var scheme
+
+    func makeBody(configuration: Configuration) -> some View {
+        let ink: Color = scheme == .dark ? .white : .black
+        return configuration.label
+            .foregroundStyle(ink)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(ink.opacity(configuration.isPressed ? 0.22 : 0.10))
+            )
     }
 }
