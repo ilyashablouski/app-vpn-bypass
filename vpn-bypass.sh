@@ -125,7 +125,7 @@ case "${1:-}" in
   watch)  need_root
           trap 'clear_routes; exit 0' INT TERM
           log "слежение запущено (интервал ${INTERVAL}с), Ctrl+C - остановить и очистить"
-          while true; do apply; sleep "$INTERVAL"; done ;;
+          while true; do apply; sleep "$INTERVAL" & wait $!; done ;;
   status) [ -f "$STATE" ] && cat "$STATE" || echo "маршрутов нет" ;;
   clear)  need_root; clear_routes ;;
   *) sed -n '2,11p' "$0"; exit 1 ;;
