@@ -80,6 +80,7 @@ guard let backend = RouteSocket() else {
 }
 // Маршруты, оставшиеся после аварийного завершения прошлого запуска.
 RouteManager.cleanupLeftovers(at: Constants.routesStatePath, backend: backend)
+DNSResolverFiles.removeAll() // файлы /etc/resolver, оставшиеся после аварийного завершения
 
 let engine = Engine(backend: backend)
 let delegate = ListenerDelegate(engine: engine)

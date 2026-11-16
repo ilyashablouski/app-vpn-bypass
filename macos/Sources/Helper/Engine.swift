@@ -25,6 +25,8 @@ actor Engine {
     private var unchanged = 0
     private var lastSyncEnd = Date.distantPast
 
+    /// Есть ли у нас файлы в /etc/resolver (чтобы убрать их, если режим выключили).
+    private var managesResolverFiles = false
     private var watcher: RouteChangeWatcher?
     private var idleExit: Task<Void, Never>?
     private let idleTimeout: UInt64 = 60
@@ -77,6 +79,7 @@ actor Engine {
         unchanged = 0
         manager.removeAll()
         manager.persist(to: Constants.routesStatePath)
+        removeResolverFiles()
         lastError = nil
         publish()
         scheduleIdleExit()
@@ -151,6 +154,20 @@ actor Engine {
             }
         }
 
+        // Домены резолвим через DNS обычной сети: DNS VPN может не отдавать адреса нужных сайтов.
+        if req.useDirectDNS {
+            let server = IPv4Target(req.dnsServer ?? "")?.address ?? gateway
+            if DNSResolverFiles.sync(domains: Set(hostNames), server: IPv4Target.format(server)) {
+                flushDNSCache()
+                try? await Task.sleep(for: .milliseconds(400)) // дать системе подхватить новые резолверы
+            }
+            managesResolverFiles = !hostNames.isEmpty
+            // Публичный DNS-сервер должен идти мимо VPN; локальные адреса достижимы напрямую.
+            if !Engine.isPrivate(server) { staticTargets.insert(IPv4Target(address: server)) }
+        } else if managesResolverFiles {
+            removeResolverFiles()
+        }
+
         let names = Array(Set(hostNames))
         let appEntries = apps
         async let dns = Resolver.resolveAll(names)
@@ -204,5 +221,28 @@ actor Engine {
         guard request == nil else { return }
         log.info("idle, exiting")
         exit(0)
+    }
+
+    // MARK: DNS
+
+    private func removeResolverFiles() {
+        if DNSResolverFiles.removeAll() { flushDNSCache() }
+        managesResolverFiles = false
+    }
+
+    /// Сбрасывает кэш DNS (в том числе отрицательные ответы), чтобы новые резолверы подействовали сразу.
+    private func flushDNSCache() {
+        for (tool, args) in [("/usr/bin/dscacheutil", ["-flushcache"]), ("/usr/bin/killall", ["-HUP", "mDNSResponder"])] {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: tool)
+            p.arguments = args
+            try? p.run()
+            p.waitUntilExit()
+        }
+    }
+
+    /// Частные адреса (10/8, 172.16/12, 192.168/16, 169.254/16): маршрут через шлюз для них не нужен.
+    private static func isPrivate(_ a: UInt32) -> Bool {
+        a >> 24 == 10 || a >> 20 == 0xAC1 || a >> 16 == 0xC0A8 || a >> 16 == 0xA9FE
     }
 }
