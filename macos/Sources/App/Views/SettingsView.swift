@@ -36,15 +36,7 @@ struct SettingsView: View {
                     Text("Список пуст").foregroundStyle(.secondary)
                 } else {
                     ForEach(model.settings.entries) { entry in
-                        HStack {
-                            EntryIcon(entry: entry)
-                            Text(entry.value)
-                            Spacer()
-                            Button(role: .destructive) { model.remove(entry) } label: {
-                                Image(systemName: "trash")
-                            }
-                            .buttonStyle(.borderless)
-                        }
+                        EntryRow(entry: entry)
                     }
                 }
             }
@@ -131,13 +123,15 @@ struct SettingsView: View {
 }
 
 /// Поле ввода с тонкой рамкой (1 pt): серая в покое, цвета акцента при фокусе.
-private struct BorderedField: ViewModifier {
+struct BorderedField: ViewModifier {
+    var autofocus = false
     @FocusState private var focused: Bool
 
     func body(content: Content) -> some View {
         content
             .textFieldStyle(.plain)
             .focused($focused)
+            .onAppear { if autofocus { focused = true } }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .textBackgroundColor)))
@@ -149,6 +143,6 @@ private struct BorderedField: ViewModifier {
     }
 }
 
-private extension View {
-    func bordered() -> some View { modifier(BorderedField()) }
+extension View {
+    func bordered(autofocus: Bool = false) -> some View { modifier(BorderedField(autofocus: autofocus)) }
 }

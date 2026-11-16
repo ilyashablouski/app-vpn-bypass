@@ -179,6 +179,19 @@ final class AppModel {
         return nil
     }
 
+    /// Меняет адрес записи-домена/IP на месте (порядок в списке сохраняется). Возвращает текст ошибки или nil.
+    func updateHost(_ entry: Entry, to text: String) -> String? {
+        let host = Validation.normalizeHost(text)
+        guard Validation.isValidHost(host) else { return "Не похоже на домен, IP или подсеть" }
+        guard let index = settings.entries.firstIndex(where: { $0.id == entry.id }) else { return "Запись не найдена" }
+        if host == entry.value { return nil }
+        let updated = Entry(kind: .host, value: host)
+        guard !settings.entries.contains(where: { $0.id == updated.id }) else { return "Уже есть в списке" }
+        settings.entries[index] = updated
+        entriesChanged()
+        return nil
+    }
+
     func remove(_ entry: Entry) {
         settings.entries.removeAll { $0.id == entry.id }
         entriesChanged()
