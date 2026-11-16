@@ -20,8 +20,6 @@ your regular gateway (`en*`). The more specific route beats the VPN's default ro
 - Exceptions stop when the VPN disconnects and resume when it reconnects (configurable).
 - `VPNBypass.app` (SwiftUI) and a root daemon `VPNBypassHelper` (XPC). No password prompts: the helper is
   approved once in System Settings.
-- No child processes: routes via `PF_ROUTE`, routing table via `sysctl`, DNS via `getaddrinfo`,
-  app connections via libproc. The VPN state is detected from events, not by polling.
 - For apps, their helper processes are matched too (by the `.app` path).
 - Entries removed from the list have their routes removed automatically.
 
@@ -59,12 +57,6 @@ ARM_ONLY=1 SIGN_ID="Apple Development: Name (TEAMID)" ./build.sh
 ```
 Binary sizes: `VPNBypass` 1.46 MB -> 369 KB, `VPNBypassHelper` 871 KB -> 271 KB. The universal build
 (arm64 + x86_64, the default) is only needed for distributing to other users.
-
-### Resource savings
-- The helper pushes status to the app on events; there is no polling.
-- The helper exits 60 s after exceptions are stopped and is started again on demand.
-- The sync loop runs at low priority with timer tolerance; the interval grows while routes do not change
-  (up to x4 with no apps in the list and up to x2 with apps, 300 s max), and network changes are caught by a `PF_ROUTE` event.
 
 ### Signing: adding a certificate in Xcode
 
