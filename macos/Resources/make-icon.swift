@@ -15,14 +15,7 @@ func draw(in ctx: CGContext) {
     let bodyRect = CGRect(x: 100, y: 100, width: 824, height: 824)
     let body = CGPath(roundedRect: bodyRect, cornerWidth: 185, cornerHeight: 185, transform: nil)
 
-    // Тень и фон.
-    ctx.saveGState()
-    ctx.setShadow(offset: CGSize(width: 0, height: -14), blur: 28, color: color(0, 0, 0, 0.35))
-    ctx.addPath(body)
-    ctx.setFillColor(color(0.2, 0.3, 0.9))
-    ctx.fillPath()
-    ctx.restoreGState()
-
+    // Фон (без внешней тени).
     ctx.saveGState()
     ctx.addPath(body)
     ctx.clip()
