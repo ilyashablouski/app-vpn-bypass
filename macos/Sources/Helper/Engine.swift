@@ -25,6 +25,8 @@ actor Engine {
     private var unchanged = 0
     private var lastSyncEnd = Date.distantPast
 
+    /// Цепочки CNAME доменов (системе нужны resolver-файлы и для их звеньев).
+    private var cnameTargets: [String: [String]] = [:]
     /// Есть ли у нас файлы в /etc/resolver (чтобы убрать их, если режим выключили).
     private var managesResolverFiles = false
     private var watcher: RouteChangeWatcher?
@@ -76,6 +78,7 @@ actor Engine {
         request = nil
         resolved.removeAll()
         appSeen.removeAll()
+        cnameTargets.removeAll()
         unchanged = 0
         manager.removeAll()
         manager.persist(to: Constants.routesStatePath)
@@ -157,7 +160,15 @@ actor Engine {
         // Домены резолвим через DNS обычной сети: DNS VPN может не отдавать адреса нужных сайтов.
         if req.useDirectDNS {
             let server = IPv4Target(req.dnsServer ?? "")?.address ?? gateway
-            if DNSResolverFiles.sync(domains: Set(hostNames), server: IPv4Target.format(server)) {
+            // Система запрашивает цели CNAME отдельно и через DNS VPN, поэтому звенья цепочки
+            // (например ir.ozone.ru -> mmedia.ozone.ru -> edge-mmedia-lb.ozone.ru) тоже нужно направить на DNS обычной сети.
+            let chains = await DNSClient.cnameChains(for: Array(Set(hostNames)), server: server)
+            guard gen == generation else { return }
+            for (host, chain) in chains { cnameTargets[host] = chain }
+            let activeNames = Set(hostNames)
+            cnameTargets = cnameTargets.filter { activeNames.contains($0.key) }
+            let resolverDomains = activeNames.union(cnameTargets.values.flatMap { $0 })
+            if DNSResolverFiles.sync(domains: resolverDomains, server: IPv4Target.format(server)) {
                 flushDNSCache()
                 try? await Task.sleep(for: .milliseconds(400)) // дать системе подхватить новые резолверы
             }
