@@ -65,7 +65,7 @@ struct SettingsView: View {
                     TextField("", text: $gatewayText, prompt: Text("авто, напр. 192.168.0.1"))
                         .labelsHidden()
                         .bordered()
-                        .frame(width: 220)
+                        .frame(minWidth: 100, maxWidth: 220)
                         .onSubmit { model.setGatewayOverride(gatewayText) }
                 }
             }

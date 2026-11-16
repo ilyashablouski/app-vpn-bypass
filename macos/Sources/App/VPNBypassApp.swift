@@ -16,8 +16,11 @@ struct VPNBypassApp: App {
         Window("VPN Bypass", id: "settings") {
             SettingsView()
                 .environment(model)
-                .frame(minWidth: 460, minHeight: 520)
+                // Минимальная ширина 248; размер по умолчанию задан ниже (defaultSize).
+                .frame(minWidth: 248, minHeight: 520)
         }
-        .windowResizability(.contentSize)
+        // contentSize открывал бы окно в «идеальную» ширину формы (до 900): задаём размер явно.
+        .defaultSize(width: 496, height: 520)
+        .windowResizability(.contentMinSize)
     }
 }
