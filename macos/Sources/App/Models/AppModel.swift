@@ -22,6 +22,11 @@ final class AppModel {
     init() {
         settings = SettingsStore.load()
         refreshSystemState()
+        helper.onStatus = { [weak self] status in
+            guard let self else { return }
+            self.status = status
+            if self.running { self.lastError = status.lastError }
+        }
         let m = VPNMonitor { [weak self] active in
             Task { @MainActor in self?.vpnChanged(active) }
         }
