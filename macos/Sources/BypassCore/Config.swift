@@ -38,6 +38,20 @@ public struct Entry: Codable, Hashable, Identifiable, Sendable {
     }
 }
 
+/// Категория записи для группировки в списке: приложения, домены, IP-адреса и подсети.
+public enum EntryCategory: Int, CaseIterable, Sendable {
+    case apps, domains, addresses
+}
+
+extension Entry {
+    public var category: EntryCategory {
+        switch kind {
+        case .app: return .apps
+        case .host: return IPv4Target(value) != nil ? .addresses : .domains
+        }
+    }
+}
+
 public struct Settings: Codable, Equatable, Sendable {
     public var entries: [Entry] = []
     public var bypassEnabled = false

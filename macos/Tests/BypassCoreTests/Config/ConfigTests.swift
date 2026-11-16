@@ -55,4 +55,11 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(decoded.value, "example.com")
         XCTAssertNil(decoded.note)
     }
+
+    func testEntryCategories() {
+        XCTAssertEqual(Entry(kind: .app, value: "Telegram").category, .apps)
+        XCTAssertEqual(Entry(kind: .host, value: "example.com").category, .domains)
+        XCTAssertEqual(Entry(kind: .host, value: "94.198.217.159").category, .addresses)
+        XCTAssertEqual(Entry(kind: .host, value: "10.0.0.0/8").category, .addresses)
+    }
 }
