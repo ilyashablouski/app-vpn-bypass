@@ -100,7 +100,7 @@ public struct StartRequest: Codable, Sendable {
     }
 }
 
-public struct HelperStatus: Codable, Sendable {
+public struct HelperStatus: Codable, Equatable, Sendable {
     public var running: Bool
     public var routeCount: Int
     public var gateway: String?
@@ -120,4 +120,10 @@ public struct HelperStatus: Codable, Sendable {
     func stop(reply: @escaping (String?) -> Void)
     /// JSON `HelperStatus`.
     func status(reply: @escaping (Data) -> Void)
+}
+
+/// Обратный канал helper -> приложение: статус приходит по событиям, без опроса.
+@objc public protocol ClientProtocol {
+    /// JSON `HelperStatus`.
+    func statusChanged(_ status: Data)
 }
