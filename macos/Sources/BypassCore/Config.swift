@@ -19,13 +19,22 @@ public struct Entry: Codable, Hashable, Identifiable, Sendable {
     public var value: String
     /// Путь к .app (для приложений): по нему находятся и вспомогательные процессы.
     public var path: String?
+    /// Необязательное описание для адреса (на маршруты не влияет).
+    public var note: String?
 
     public var id: String { "\(kind.rawValue):\(value)" }
 
-    public init(kind: Kind, value: String, path: String? = nil) {
+    public init(kind: Kind, value: String, path: String? = nil, note: String? = nil) {
         self.kind = kind
         self.value = value
         self.path = path
+        self.note = Entry.cleanNote(note)
+    }
+
+    /// Обрезает пробелы и длину; пустое описание превращается в nil.
+    public static func cleanNote(_ text: String?, maxLength: Int = 200) -> String? {
+        guard let t = text?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
+        return String(t.prefix(maxLength))
     }
 }
 
@@ -68,8 +77,10 @@ public enum LegacyConfig {
         var result: [Entry] = []
         var seen = Set<String>()
         for raw in text.split(whereSeparator: \.isNewline) {
-            let line = raw.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)[0]
-                .trimmingCharacters(in: .whitespaces)
+            let parts = raw.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
+            let line = parts[0].trimmingCharacters(in: .whitespaces)
+            // Комментарий в конце строки становится описанием записи.
+            let comment = parts.count > 1 ? String(parts[1]) : nil
             guard !line.isEmpty else { continue }
             let entry: Entry
             if line.hasPrefix("app:") {
@@ -79,7 +90,7 @@ public enum LegacyConfig {
             } else {
                 let host = Validation.normalizeHost(line)
                 guard Validation.isValidHost(host) else { continue }
-                entry = Entry(kind: .host, value: host)
+                entry = Entry(kind: .host, value: host, note: comment)
             }
             if seen.insert(entry.id).inserted { result.append(entry) }
         }
