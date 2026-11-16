@@ -43,9 +43,17 @@ struct SettingsView: View {
                 }
                 if model.settings.entries.isEmpty {
                     Text("Список пуст").foregroundStyle(.secondary)
-                } else {
-                    ForEach(model.settings.entries) { entry in
-                        EntryRow(entry: entry)
+                }
+            }
+
+            // Приложения, домены и IP/подсети показываем отдельными блоками, чтобы они не смешивались.
+            ForEach(EntryCategory.allCases, id: \.self) { category in
+                let items = model.settings.entries.filter { $0.category == category }
+                if !items.isEmpty {
+                    Section("\(category.title) · \(items.count)") {
+                        ForEach(items) { entry in
+                            EntryRow(entry: entry)
+                        }
                     }
                 }
             }
@@ -175,4 +183,14 @@ extension View {
 extension Font {
     /// Размер вспомогательного текста: описания записей и пояснения в настройках (12 пт, на 2 больше .caption).
     static let noteText = Font.system(size: 12)
+}
+
+extension EntryCategory {
+    var title: String {
+        switch self {
+        case .apps: return "Приложения"
+        case .domains: return "Домены"
+        case .addresses: return "IP-адреса и подсети"
+        }
+    }
 }
