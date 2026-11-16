@@ -66,8 +66,12 @@ struct MenuContentView: View {
         .padding(14)
         .frame(width: 280)
         .task {
+            // Пока меню открыто, обновляем число маршрутов (оно меняется вместе с соединениями приложений).
             model.refreshSystemState()
-            await model.refreshStatus()
+            while !Task.isCancelled {
+                await model.refreshStatus()
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+            }
         }
     }
 }

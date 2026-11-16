@@ -41,7 +41,7 @@ final class AppModel {
     var summary: String {
         if !settings.bypassEnabled { return "Исключения выключены" }
         if !vpnActive { return "Ожидание VPN" }
-        if running { return "Активны: маршрутов \(status?.routeCount ?? 0)" }
+        if running { return "Активные маршруты: \(status?.routeCount ?? 0)" }
         return "Запуск..."
     }
 

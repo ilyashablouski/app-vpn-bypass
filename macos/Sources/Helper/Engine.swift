@@ -22,16 +22,21 @@ actor Engine {
         manager = RouteManager(backend: backend)
     }
 
-    func start(_ req: StartRequest) {
+    /// Применяет запрос и возвращается после первой синхронизации, чтобы статус сразу был точным.
+    func start(_ req: StartRequest) async {
         request = req
         generation += 1
         loop?.cancel()
+        loop = nil
         let gen = generation
+        await sync(generation: gen)
+        guard gen == generation else { return } // за время синхронизации пришёл новый запрос или stop()
         let interval = UInt64(max(5, req.interval)) * 1_000_000_000
         loop = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.sync(generation: gen)
                 try? await Task.sleep(nanoseconds: interval)
+                guard !Task.isCancelled else { return }
+                await self?.sync(generation: gen)
             }
         }
     }
