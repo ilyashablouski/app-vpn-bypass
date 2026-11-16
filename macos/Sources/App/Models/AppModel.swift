@@ -84,7 +84,9 @@ final class AppModel {
                     return
                 }
                 let req = StartRequest(entries: settings.entries, interval: settings.interval,
-                                       gateway: settings.gatewayOverride)
+                                       gateway: settings.gatewayOverride,
+                                       useDirectDNS: settings.resolveViaPhysicalDNS,
+                                       dnsServer: settings.dnsServer)
                 lastError = await helper.start(req)
                 running = lastError == nil
             } else if running {
@@ -127,6 +129,20 @@ final class AppModel {
     func setGatewayOverride(_ text: String) {
         let t = text.trimmingCharacters(in: .whitespaces)
         settings.gatewayOverride = t.isEmpty ? nil : t
+        save()
+        if running { reconcile() }
+    }
+
+    func setResolveViaPhysicalDNS(_ on: Bool) {
+        settings.resolveViaPhysicalDNS = on
+        save()
+        if running { reconcile() }
+    }
+
+    func setDNSServer(_ text: String) {
+        let t = text.trimmingCharacters(in: .whitespaces)
+        // Принимаем только одиночный IPv4-адрес; пустое значение означает «шлюз».
+        settings.dnsServer = IPv4Target(t).flatMap { $0.isHost ? t : nil }
         save()
         if running { reconcile() }
     }

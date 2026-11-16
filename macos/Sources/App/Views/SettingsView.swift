@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var message: String?
     @State private var intervalText = ""
     @State private var gatewayText = ""
+    @State private var dnsText = ""
 
     var body: some View {
         Form {
@@ -56,6 +57,11 @@ struct SettingsView: View {
                     get: { model.settings.autoResume }, set: { model.setAutoResume($0) }))
                 Text("При отключении VPN исключения останавливаются автоматически.")
                     .font(.noteText).foregroundStyle(.secondary)
+                Toggle("Резолвить домены через DNS обычной сети", isOn: Binding(
+                    get: { model.settings.resolveViaPhysicalDNS }, set: { model.setResolveViaPhysicalDNS($0) }))
+                Text("Нужно, если DNS VPN не отдаёт адреса нужных сайтов (например, ozon.by). "
+                     + "Создаёт файлы в /etc/resolver для доменов из списка и убирает их при остановке.")
+                    .font(.noteText).foregroundStyle(.secondary)
             }
 
             Section("Дополнительно") {
@@ -68,6 +74,13 @@ struct SettingsView: View {
                         .frame(width: 70)
                         .multilineTextAlignment(.trailing)
                         .onSubmit { if let v = Int(intervalText) { model.setInterval(v) } }
+                }
+                LabeledContent("DNS-сервер") {
+                    TextField("", text: $dnsText, prompt: Text("авто: шлюз (роутер)"))
+                        .labelsHidden()
+                        .bordered()
+                        .frame(minWidth: 100, maxWidth: 220)
+                        .onSubmit { model.setDNSServer(dnsText) }
                 }
                 LabeledContent("Шлюз вручную") {
                     TextField("", text: $gatewayText, prompt: Text("авто, напр. 192.168.0.1"))
@@ -98,6 +111,7 @@ struct SettingsView: View {
             model.refreshSystemState()
             intervalText = String(model.settings.interval)
             gatewayText = model.settings.gatewayOverride ?? ""
+            dnsText = model.settings.dnsServer ?? ""
         }
     }
 
