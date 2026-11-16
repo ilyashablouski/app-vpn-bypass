@@ -37,8 +37,7 @@ struct SettingsView: View {
                 } else {
                     ForEach(model.settings.entries) { entry in
                         HStack {
-                            Image(systemName: entry.kind == .app ? "app" : "globe")
-                                .foregroundStyle(.secondary)
+                            EntryIcon(entry: entry)
                             Text(entry.value)
                             Spacer()
                             Button(role: .destructive) { model.remove(entry) } label: {
