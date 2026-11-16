@@ -33,9 +33,9 @@ final class AppModel {
 
     var isBypassActive: Bool { settings.bypassEnabled && vpnActive && running }
 
-    var iconName: String {
-        if isBypassActive { return "checkmark.shield.fill" }
-        return settings.bypassEnabled ? "shield.lefthalf.filled.slash" : "shield"
+    var iconState: MenuIconState {
+        if isBypassActive { return .active }
+        return settings.bypassEnabled ? .waiting : .off
     }
 
     var summary: String {

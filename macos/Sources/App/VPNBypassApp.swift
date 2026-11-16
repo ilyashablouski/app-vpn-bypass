@@ -9,7 +9,7 @@ struct VPNBypassApp: App {
             MenuContentView()
                 .environment(model)
         } label: {
-            Image(systemName: model.iconName)
+            Image(nsImage: MenuBarIcon.image(for: model.iconState))
         }
         .menuBarExtraStyle(.window)
 
