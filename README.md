@@ -2,130 +2,136 @@
 
 # VPN Bypass
 
-Нативное приложение для macOS: исключает выбранные домены, IP и приложения из VPN. Остальной трафик идёт через VPN как обычно.
+[Русский](README.ru.md) · **English**
+
+A native macOS app that excludes chosen domains, IPs and apps from your VPN. All other traffic keeps going through the VPN as usual.
 
 ![macOS](https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white) ![Swift](https://img.shields.io/badge/Swift-5.9-F05138?logo=swift&logoColor=white) ![SwiftUI](https://img.shields.io/badge/SwiftUI-MenuBarExtra-0A84FF?logo=swift&logoColor=white) ![Xcode](https://img.shields.io/badge/Xcode-16-147EFB?logo=xcode&logoColor=white) ![XPC](https://img.shields.io/badge/XPC-SMAppService-5E5CE6) ![PF_ROUTE](https://img.shields.io/badge/PF__ROUTE-sockets-34C759) ![IPv4](https://img.shields.io/badge/IPv4-only-8E8E93) ![Tested with](https://img.shields.io/badge/tested%20with-Urban%20VPN-1E90FF)
 
 </div>
 
-## Как работает
+## How it works
 
-VPN-клиент направляет весь трафик в туннель (`utun*`). Приложение добавляет маршруты `/32` на IP исключений
-через обычный шлюз (`en*`). Более точный маршрут побеждает default-маршрут VPN, и трафик идёт напрямую.
+A VPN client sends all traffic into its tunnel (`utun*`). The app adds `/32` routes for the excluded IPs through
+your regular gateway (`en*`). The more specific route beats the VPN's default route, so that traffic goes out directly.
 
-- Иконка в строке меню, окно настроек, автозапуск при входе в систему.
-- Исключения останавливаются при отключении VPN и возобновляются при подключении (настраивается).
-- `VPNBypass.app` (SwiftUI) и root-демон `VPNBypassHelper` (XPC). Пароль не нужен: helper один раз
-  подтверждается в Системных настройках.
-- Без дочерних процессов: маршруты через `PF_ROUTE`, таблица через `sysctl`, DNS через `getaddrinfo`,
-  соединения приложений через libproc. VPN определяется по событиям, без опроса.
-- Для приложений учитываются и вспомогательные процессы (по пути к `.app`).
-- Удалённые из списка записи убираются автоматически.
+- Menu bar icon, settings window, launch at login.
+- Exceptions list: domains, IPs, subnets and apps (with their icons). Addresses can be copied and edited in place.
+- Exceptions stop when the VPN disconnects and resume when it reconnects (configurable).
+- `VPNBypass.app` (SwiftUI) and a root daemon `VPNBypassHelper` (XPC). No password prompts: the helper is
+  approved once in System Settings.
+- No child processes: routes via `PF_ROUTE`, routing table via `sysctl`, DNS via `getaddrinfo`,
+  app connections via libproc. The VPN state is detected from events, not by polling.
+- For apps, their helper processes are matched too (by the `.app` path).
+- Entries removed from the list have their routes removed automatically.
 
-## Сборка и установка
+## Build and install
 
-Нужны Xcode 16 и macOS 14+. Версия Xcode зависит от версии вашей macOS: например, Xcode 16.2 работает
-на macOS 14.5 и новее, а для более новых Xcode может потребоваться свежая macOS. Подходящую версию
-смотрите на странице Xcode в App Store или в таблице совместимости на developer.apple.com/xcode.
-Приложение собирается и запускается на macOS 14+ (минимум задан в `Package.swift` и `Info.plist`).
+Requires Xcode 16 and macOS 14+. The Xcode version depends on your macOS version: for example, Xcode 16.2 runs
+on macOS 14.5 and later, and newer Xcode releases may need a newer macOS. Check the Xcode page in the App Store
+or the compatibility table at developer.apple.com/xcode.
+The app builds and runs on macOS 14+ (the minimum is set in `Package.swift` and `Info.plist`).
 
 ```bash
 cd macos
-swift test                                              # тесты
-SIGN_ID="Apple Development: Имя (TEAMID)" ./build.sh    # результат: macos/build/VPNBypass.app
+swift test                                              # tests
+SIGN_ID="Apple Development: Name (TEAMID)" ./build.sh   # output: macos/build/VPNBypass.app
 cp -R build/VPNBypass.app /Applications && open /Applications/VPNBypass.app
 ```
 
-### Параметры сборки (`macos/build.sh`)
+In the menu click "Установить helper" (Install helper) and approve it in System Settings, under
+General -> Login Items. An old `bypass.conf` (domain, IP or subnet, `app:Name`) can be imported with the button in
+Settings.
 
-| Параметр | Что делает |
+### Build options (`macos/build.sh`)
+
+| Option | What it does |
 |---|---|
-| `-Xswiftc -Osize` | оптимизация по размеру кода вместо скорости |
-| `-Xlinker -dead_strip` | линковщик удаляет неиспользуемый код |
-| `strip -x` | убирает локальные символы из бинарников (подпись ставится после этого) |
-| `ARM_ONLY=1` | собирает только arm64 вместо универсальной arm64 + x86_64 |
-| `SIGN_ID="..."` | сертификат подписи (по умолчанию ad-hoc `-`) |
+| `-Xswiftc -Osize` | optimizes for code size instead of speed |
+| `-Xlinker -dead_strip` | the linker drops unused code |
+| `strip -x` | removes local symbols from the binaries (signing happens afterwards) |
+| `ARM_ONLY=1` | builds arm64 only instead of universal arm64 + x86_64 |
+| `SIGN_ID="..."` | signing identity (ad-hoc `-` by default) |
 
-Для личной установки на Mac с Apple Silicon используйте `ARM_ONLY=1`:
+For a personal install on an Apple Silicon Mac use `ARM_ONLY=1`:
 ```bash
-ARM_ONLY=1 SIGN_ID="Apple Development: Имя (TEAMID)" ./build.sh
+ARM_ONLY=1 SIGN_ID="Apple Development: Name (TEAMID)" ./build.sh
 ```
-Размер бинарников: `VPNBypass` 1.46 МБ -> 369 КБ, `VPNBypassHelper` 871 КБ -> 271 КБ. Универсальная сборка
-(arm64 и x86_64, режим по умолчанию) нужна только для раздачи другим пользователям.
+Binary sizes: `VPNBypass` 1.46 MB -> 369 KB, `VPNBypassHelper` 871 KB -> 271 KB. The universal build
+(arm64 + x86_64, the default) is only needed for distributing to other users.
 
-### Экономия ресурсов
-- Статус приложению присылает helper по событиям, опроса нет.
-- Helper завершается через 60 с после остановки исключений и запускается снова по требованию.
-- Цикл синхронизации идёт с низким приоритетом и допуском таймера; интервал растёт, пока маршруты не
-  меняются (до ×4 без приложений в списке и до ×2 с ними, максимум 300 с), а смена сети ловится событием `PF_ROUTE`.
+### Resource savings
+- The helper pushes status to the app on events; there is no polling.
+- The helper exits 60 s after exceptions are stopped and is started again on demand.
+- The sync loop runs at low priority with timer tolerance; the interval grows while routes do not change
+  (up to x4 with no apps in the list and up to x2 with apps, 300 s max), and network changes are caught by a `PF_ROUTE` event.
 
-В меню нажмите «Установить helper» и подтвердите его в Системных настройках, в разделе
-«Основные -> Объекты входа». Старый `bypass.conf` (домен, IP или подсеть, `app:Имя`) импортируется кнопкой
-в настройках.
+### Signing: adding a certificate in Xcode
 
-### Подпись: добавление сертификата в Xcode
+The app must be signed to register the helper (`SMAppService`). Ad-hoc signing often does not work.
 
-Для регистрации helper (`SMAppService`) приложение должно быть подписано. Ad-hoc подпись часто не работает.
-
-1. Откройте Xcode, затем **Settings -> Accounts -> `+` -> Apple ID** и войдите. Бесплатного аккаунта хватает.
-2. Выберите аккаунт, нажмите **Manage Certificates... -> `+` -> Apple Development**. Для публикации
-   другим пользователям нужна платная программа Apple Developer и сертификат **Developer ID Application**
-   (создаётся там же или на developer.apple.com).
-3. Проверьте, что сертификат виден системе:
+1. Open Xcode, then **Settings -> Accounts -> `+` -> Apple ID** and sign in. A free account is enough.
+2. Select the account and click **Manage Certificates... -> `+` -> Apple Development**. To distribute the app
+   to others you need the paid Apple Developer Program and a **Developer ID Application** certificate
+   (created there or at developer.apple.com).
+3. Check that the system sees the certificate:
    ```bash
    security find-identity -v -p codesigning
    ```
-   Скопируйте строку вида `Apple Development: Имя (TEAMID)` в `SIGN_ID`.
-4. Если выводится `0 valid identities`, а сертификат в Keychain есть, обычно не хватает промежуточного
-   сертификата Apple WWDR G3. Установите его и повторите проверку:
+   Copy the line like `Apple Development: Name (TEAMID)` into `SIGN_ID`.
+4. If it prints `0 valid identities` although the certificate is in Keychain, the intermediate Apple WWDR G3
+   certificate is usually missing. Install it and check again:
    ```bash
    curl -O https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer
    security add-certificates -k ~/Library/Keychains/login.keychain-db AppleWWDRCAG3.cer
    ```
-5. Для строгой привязки XPC добавьте Team ID в `Constants.clientRequirement`
+5. To pin the XPC client more strictly, add your Team ID to `Constants.clientRequirement`
    (`and certificate leaf[subject.OU] = "TEAMID"`).
 
-## Проверка работы (Telegram и YouTube)
+## Verifying it works (Telegram and YouTube)
 
-Маршрут выбирается один раз, при открытии соединения. Уже открытые соединения не переключаются,
-поэтому порядок действий важен.
+A route is chosen once, when a connection is opened. Connections that are already open are not switched,
+so the order of steps matters.
 
-1. Установите helper и добавьте записи в «Настройки…»:
-   Telegram через «Добавить приложение…», YouTube доменами `youtube.com`, `www.youtube.com`, `youtu.be`,
-   `googlevideo.com`, `ytimg.com` (поддомены нужно перечислять явно).
-2. Включите VPN, затем тумблер «Исключения из VPN». Дождитесь «Активные маршруты: N» (N больше нуля).
-3. **Только после этого запускайте или перезапускайте проверяемые приложения.** Если они были открыты раньше,
-   закройте их полностью (⌘Q) и откройте заново. После выключения исключений тоже перезапустите приложение.
+1. Install the helper and add entries in "Настройки…" (Settings):
+   Telegram via "Добавить приложение…" (Add application), YouTube with the domains `youtube.com`, `www.youtube.com`,
+   `youtu.be`, `googlevideo.com`, `ytimg.com` (subdomains must be listed explicitly).
+2. Turn the VPN on, then the "Исключения из VPN" (VPN exceptions) switch. Wait for "Активные маршруты: N"
+   (active routes, N greater than zero).
+3. **Only then start or restart the apps you test.** If they were already open, quit them completely (⌘Q)
+   and open them again. After turning exceptions off, restart the app as well.
 
-Чтобы маршруты появлялись раньше приложений, включите автозапуск и оставьте тумблер включённым.
+To have routes in place before your apps start, enable launch at login and keep the switch on.
 
 ```bash
-# Telegram: локальный адрес вашей сети (192.168.x.x) значит мимо VPN, адрес VPN (10.x) значит через VPN
+# Telegram: a local address of your network (192.168.x.x) means it bypasses the VPN, a VPN address (10.x) means through the VPN
 lsof -nP -iTCP -a -c Telegram -sTCP:ESTABLISHED
 route -n get 149.154.167.41 | grep -E "gateway|interface"
 
-# YouTube: interface en0 значит мимо VPN, utun* значит через VPN
+# YouTube: interface en0 means it bypasses the VPN, utun* means through the VPN
 route -n get www.youtube.com | grep -E "gateway|interface"
 IP=$(curl -s -o /dev/null -w '%{remote_ip}\n' https://www.youtube.com); route -n get $IP | grep -E "gateway|interface"
 
-# Общее
-netstat -rn -f inet | grep <шлюз>                 # добавленные маршруты (флаги UGHS)
-grep -c '' /var/run/com.vpnbypass.helper.routes   # число маршрутов, как в меню
-traceroute -n -m 3 <IP>                           # первый хоп: роутер значит мимо VPN
+# General
+netstat -rn -f inet | grep <gateway>              # routes added by the app (flags UGHS)
+grep -c '' /var/run/com.vpnbypass.helper.routes   # route count, same as in the menu
+traceroute -n -m 3 <IP>                           # first hop: your router means it bypasses the VPN
 log stream --level info --predicate 'subsystem == "com.vpnbypass.helper"'
 ```
 
-YouTube отдаёт много адресов: если DNS вернул IP, которого ещё нет в маршрутах, он пойдёт через VPN до
-следующего обновления (по умолчанию 30 с). Для сравнения выключите тумблер, перезапустите приложение
-и повторите: интерфейс сменится на `utun*`.
+YouTube serves many addresses: if DNS returned an IP that has no route yet, it goes through the VPN until the next
+refresh (30 s by default). To compare, turn the switch off, restart the app and repeat: the interface changes
+to `utun*`.
 
-## Совместимость и ограничения
+## Compatibility and limitations
 
-- Работает с любым VPN, который ведёт трафик через `utun*` с default-маршрутом (или `0/1` и `128.0/1`).
-  Проверялось на Urban VPN. Не подойдут прокси-режимы, content filter, per-app VPN и kill switch, блокирующий
-  трафик вне туннеля. VPN на `ppp*`/`ipsec*` сейчас не определяются.
-- Только IPv4. Поддомены нужно перечислять явно (`*.` в начале отбрасывается).
-- IP приложений берутся из уже открытых соединений: первые соединения после запуска могут пойти через VPN.
-  Надёжнее вписывать и их домены.
-- Если VPN перехватывает DNS или перезаписывает маршруты, часть трафика может идти через VPN.
-- Для ручного шлюза есть поле «Шлюз вручную» в настройках.
+- Works with any VPN that sends traffic through a `utun*` interface with a default route (or `0/1` and `128.0/1`).
+  Tested with Urban VPN. Proxy modes, content filters, per-app VPNs and a kill switch that blocks traffic outside
+  the tunnel are not supported. VPNs on `ppp*`/`ipsec*` are not detected as active yet.
+- IPv4 only. Subdomains must be listed explicitly (a leading `*.` is dropped).
+- App IPs come from already open connections: the first connections after an app starts may go through the VPN.
+  It is more reliable to add the app's domains too.
+- If the VPN hijacks DNS or rewrites routes, part of the traffic may still go through the VPN.
+- A manual gateway can be set in the "Шлюз вручную" (manual gateway) field in Settings.
+
+> The app interface is currently in Russian.
